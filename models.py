@@ -1,5 +1,6 @@
 """Modèles de données Pydantic pour l'assistant d'e-mails."""
 from enum import Enum
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -37,9 +38,29 @@ class EmailInput(BaseModel):
 
 
 class EmailAnalysis(BaseModel):
-    """Résultat de l'analyse, garanti conforme par Pydantic."""
+    """Résultat de l'analyse par règles (Phase 1)."""
 
     category: Category
     priority: Priority
     category_keywords: list[str] = Field(default_factory=list)
     priority_keywords: list[str] = Field(default_factory=list)
+
+
+class LLMOutput(BaseModel):
+    """Format EXACT que le LLM doit renvoyer (validé par Pydantic)."""
+
+    category: Category
+    priority: Priority
+    summary: str = Field(min_length=1)
+    reply_draft: str = Field(min_length=1)
+
+
+class EmailResult(BaseModel):
+    """Résultat final : analyse + brouillon de réponse."""
+
+    category: Category
+    priority: Priority
+    summary: str = ""
+    reply_draft: str = ""
+    source: Literal["llm", "rules"]
+    approved: bool = False  # reste False tant que l'utilisateur n'a pas validé
