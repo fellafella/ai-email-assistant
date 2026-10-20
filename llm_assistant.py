@@ -18,7 +18,7 @@ load_dotenv()  # charge le fichier .env (clé API) dans les variables d'environn
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MODEL = "gemini-2.5-flash"
+DEFAULT_MODEL = "gemini-3.8-flash"
 
 SYSTEM_PROMPT = """You are an email assistant. You analyze one email and write a reply DRAFT.
 
