@@ -4,8 +4,7 @@ Rien n'est envoyé : tu relis et envoies toi-même depuis Gmail (dossier Brouill
 """
 import logging
 
-# NOUVEAU : is_no_reply ajouté à l'import
-from gmail_client import GmailError, create_draft_reply, fetch_unread, get_service, is_no_reply
+from gmail_client import GmailError, create_draft_reply, fetch_unread, get_service, skip_reason
 from llm_assistant import process_email
 
 logging.basicConfig(level=logging.WARNING, format="%(levelname)s: %(message)s")
@@ -24,11 +23,11 @@ def main() -> None:
         return
 
     for msg in messages:
-        # NOUVEAU : on ignore les adresses automatiques AVANT d'appeler le LLM
-        if is_no_reply(msg.reply_to):
-            print(f"\n=== {msg.email.subject} ===\nExpéditeur automatique (no-reply) : ignoré.")
+        # NOUVEAU : on ignore les messages automatiques AVANT d'appeler le LLM
+        reason = skip_reason(msg)
+        if reason:
+            print(f"\n=== {msg.email.subject} ===\nIgnoré : {reason}.")
             continue
-
         result = process_email(msg.email)
         print(f"\n=== {msg.email.subject} (de {msg.email.sender}) ===")
         print(f"Source: {result.source} | {result.category.value} | {result.priority.value}")

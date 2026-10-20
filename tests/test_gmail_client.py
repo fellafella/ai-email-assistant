@@ -13,6 +13,7 @@ from gmail_client import (
     fetch_unread,
     is_no_reply,
     parse_message,
+    skip_reason,
 )
 from models import EmailInput
 
@@ -146,3 +147,35 @@ def test_is_no_reply():
 def test_no_reply_draft_refused():
     with pytest.raises(GmailError):
         create_draft_reply(MagicMock(), make_msg(reply_to="no-reply@x.com"), "x")
+def plain_payload(headers):
+    return {"mimeType": "text/plain", "headers": headers, "body": {"data": b64("Promo")}}
+
+
+def test_newsletter_detected_by_list_unsubscribe():
+    headers = HEADERS + [{"name": "List-Unsubscribe", "value": "<mailto:u@x.com>"}]
+    msg = parse_message(raw_message(plain_payload(headers)))
+    assert msg.is_automated
+    assert skip_reason(msg) is not None
+
+
+def test_promotions_label_detected():
+    raw = raw_message(plain_payload(HEADERS))
+    raw["labelIds"] = ["INBOX", "UNREAD", "CATEGORY_PROMOTIONS"]
+    assert parse_message(raw).is_automated
+
+
+def test_auto_submitted_header_detected():
+    headers = HEADERS + [{"name": "Auto-Submitted", "value": "auto-generated"}]
+    assert parse_message(raw_message(plain_payload(headers))).is_automated
+
+
+def test_normal_email_is_not_automated():
+    msg = parse_message(raw_message(plain_payload(HEADERS)))
+    assert not msg.is_automated
+    assert skip_reason(msg) is None
+
+
+def test_automated_draft_refused():
+    with pytest.raises(GmailError):
+        create_draft_reply(MagicMock(), make_msg(is_automated=True), "x")
+                

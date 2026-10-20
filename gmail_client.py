@@ -32,11 +32,11 @@ BASE_DIR = Path(__file__).resolve().parent
 CREDENTIALS_FILE = BASE_DIR / "credentials.json"  # téléchargé depuis Google Cloud
 TOKEN_FILE = BASE_DIR / "token.json"              # créé après la 1re connexion
 MAX_BODY_CHARS = 5000  # limite envoyée au LLM
-
-# NOUVEAU : adresses automatiques auxquelles on ne répond pas
 NO_REPLY_PATTERN = re.compile(
     r"no[-_.]?reply|do[-_.]?not[-_.]?reply|mailer-daemon", re.IGNORECASE
 )
+# NOUVEAU : catégories Gmail qui correspondent à des messages en masse
+AUTOMATED_LABELS = {"CATEGORY_PROMOTIONS", "CATEGORY_SOCIAL", "CATEGORY_FORUMS"}
 
 
 class GmailError(Exception):
@@ -51,13 +51,36 @@ class GmailMessage(BaseModel):
     message_id: str = ""   # en-tête Message-ID
     references: str = ""
     reply_to: str = ""     # adresse du destinataire de la réponse
+    is_automated: bool = False  # NOUVEAU : newsletter, promotion, notification
     email: EmailInput
 
 
-# NOUVEAU
 def is_no_reply(address: str) -> bool:
     """True si l'adresse est automatique (no-reply, mailer-daemon...)."""
     return bool(NO_REPLY_PATTERN.search(address))
+
+
+# NOUVEAU
+def _is_automated(headers: dict[str, str], labels: list[str]) -> bool:
+    """Détecte les messages en masse grâce à leurs en-têtes et aux catégories Gmail."""
+    if "list-unsubscribe" in headers or "list-id" in headers:
+        return True
+    if headers.get("precedence", "").lower() in {"bulk", "list", "junk"}:
+        return True
+    auto_submitted = headers.get("auto-submitted", "").lower()
+    if auto_submitted and auto_submitted != "no":
+        return True
+    return bool(AUTOMATED_LABELS & set(labels))
+
+
+# NOUVEAU
+def skip_reason(msg: GmailMessage) -> str | None:
+    """Renvoie la raison pour laquelle on ne répond pas, ou None si on peut répondre."""
+    if is_no_reply(msg.reply_to):
+        return "expéditeur automatique (no-reply)"
+    if msg.is_automated:
+        return "message automatique (newsletter, promotion, notification)"
+    return None
 
 
 # --- Authentification ---------------------------------------------------------
@@ -127,6 +150,7 @@ def parse_message(raw: dict[str, Any]) -> GmailMessage:
         message_id=headers.get("message-id", ""),
         references=headers.get("references", ""),
         reply_to=parseaddr(headers.get("reply-to") or headers.get("from", ""))[1],
+        is_automated=_is_automated(headers, raw.get("labelIds", [])),
         email=EmailInput(
             sender=headers.get("from"),
             subject=headers.get("subject", ""),
@@ -174,9 +198,10 @@ def create_draft_reply(service: Any, msg: GmailMessage, reply_text: str) -> str:
     """Crée un brouillon dans Gmail et renvoie son identifiant. N'envoie rien."""
     if not msg.reply_to:
         raise GmailError("Adresse du destinataire introuvable.")
-    # NOUVEAU : pas de brouillon vers une adresse automatique
-    if is_no_reply(msg.reply_to):
-        raise GmailError("Cette adresse n'accepte pas de réponses (no-reply).")
+    # NOUVEAU : pas de brouillon pour les messages automatiques
+    reason = skip_reason(msg)
+    if reason:
+        raise GmailError(f"Pas de brouillon : {reason}.")
     try:
         reply = build_reply(msg, reply_text)
     except ValueError as exc:  # en-tête invalide (ex: retour à la ligne injecté)
