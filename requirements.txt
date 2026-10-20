@@ -2,3 +2,6 @@ pydantic>=2.0
 pytest>=8.0
 google-genai>=1.0
 python-dotenv>=1.0
+streamlit>=1.30
+google-api-python-client>=2.0
+google-auth-oauthlib>=1.0
