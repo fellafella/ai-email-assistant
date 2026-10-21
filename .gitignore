@@ -1,8 +1,28 @@
+# Environnement Python
 .venv/
+venv/
+
+# Fichiers compilés
 __pycache__/
+*.py[cod]
+
+# Secrets et identifiants
 .env
-*.pyc
-.pytest_cache/
-.vscode/
+.env.*
+!.env.example
 credentials.json
+credentials.json.json
 token.json
+
+# Tests
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Éditeur
+.vscode/
+
+# Système
+.DS_Store
+Thumbs.dbcredentials*.json
+client_secret*.json
